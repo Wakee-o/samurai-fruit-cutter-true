@@ -66,9 +66,9 @@ bool paused = false;
 
 // Отдельная позиция источника света для этой сцены.
 // Так клавиша F и переключатель L дают заметный результат независимо от стандартного Light из каркаса.
-float sceneLightX = 1.6f;
-float sceneLightY = 2.8f;
-float sceneLightZ = 1.8f;
+float sceneLightX = -2.8f;
+float sceneLightY = 2.4f;
+float sceneLightZ = 1.7f;
 
 // ------------------------------------------------------------
 // Служебные функции
@@ -82,36 +82,61 @@ static double rnd01(int seed)
 
 static void setMaterial(float r, float g, float b, float a = 1.0f, float specPower = 48.0f)
 {
-    // Низкая собственная подсветка нужна, чтобы включение/выключение света было хорошо заметно.
-    // Без этого объект выглядит почти одинаково и при GL_LIGHTING, и без него.
-    float amb[] = { r * 0.06f, g * 0.06f, b * 0.06f, a };
+    // Материал задаём вручную через glMaterial.
+    // GL_COLOR_MATERIAL в Render() отключён, иначе OpenGL перезаписывает ambient/diffuse
+    // обычным glColor, и сцена выглядит почти одинаково при включенном и выключенном свете.
+    float amb[] = { r * 0.025f, g * 0.025f, b * 0.025f, a };
     float dif[] = { r, g, b, a };
-    float spec[] = { 0.55f, 0.55f, 0.55f, a };
+    float spec[] = { 0.70f, 0.70f, 0.70f, a };
 
     glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, amb);
     glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, dif);
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, spec);
     glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, specPower);
-    glColor4f(r, g, b, a);
+
+    // Когда GL_LIGHTING выключен, OpenGL использует glColor напрямую.
+    // Поэтому специально делаем режим без освещения плоским и более тёмным,
+    // чтобы переключатель L был хорошо заметен на защите.
+    if (lightning)
+        glColor4f(r, g, b, a);
+    else
+        glColor4f(r * 0.30f, g * 0.30f, b * 0.30f, a);
+}
+
+static void disableAllSceneLights()
+{
+    glDisable(GL_LIGHT0);
+    glDisable(GL_LIGHT1);
+    glDisable(GL_LIGHT2);
+    glDisable(GL_LIGHT3);
+    glDisable(GL_LIGHT4);
+    glDisable(GL_LIGHT5);
+    glDisable(GL_LIGHT6);
+    glDisable(GL_LIGHT7);
 }
 
 static void setupSceneLighting()
 {
+    // Полностью отключаем все старые источники света из каркаса лабораторной,
+    // чтобы на сцену влиял только наш GL_LIGHT0.
+    disableAllSceneLights();
+
     if (!lightning)
     {
         glDisable(GL_LIGHTING);
-        glDisable(GL_LIGHT0);
         return;
     }
 
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
     glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE);
+    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
 
-    float globalAmbient[] = { 0.015f, 0.015f, 0.020f, 1.0f };
-    float lightAmbient[]  = { 0.025f, 0.020f, 0.020f, 1.0f };
-    float lightDiffuse[]  = { 1.65f, 1.42f, 1.05f, 1.0f };
-    float lightSpecular[] = { 1.90f, 1.80f, 1.55f, 1.0f };
+    // Минимальная глобальная подсветка: без источника света сцена почти не освещается.
+    float globalAmbient[] = { 0.002f, 0.002f, 0.003f, 1.0f };
+    float lightAmbient[]  = { 0.010f, 0.008f, 0.006f, 1.0f };
+    float lightDiffuse[]  = { 1.05f, 0.88f, 0.62f, 1.0f };
+    float lightSpecular[] = { 1.25f, 1.15f, 0.95f, 1.0f };
     float lightPos[]      = { sceneLightX, sceneLightY, sceneLightZ, 1.0f };
 
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, globalAmbient);
@@ -120,10 +145,10 @@ static void setupSceneLighting()
     glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular);
     glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
 
-    // Небольшое затухание делает положение лампы заметным: рядом светлее, дальше темнее.
-    glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0.55f);
-    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.10f);
-    glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.030f);
+    // Более заметное затухание: при переносе источника клавишей F освещение меняется нагляднее.
+    glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0.35f);
+    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.28f);
+    glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.075f);
 }
 
 static void drawUnitCube()
@@ -760,8 +785,7 @@ void initRender()
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_NORMALIZE);
-    glEnable(GL_COLOR_MATERIAL);
-    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+    glDisable(GL_COLOR_MATERIAL);
 
     camera.caclulateCameraPos();
 
@@ -781,9 +805,9 @@ void initRender()
     text.setSize(620, 260);
 
     camera.setPosition(3.6, 2.25, 3.0);
-    sceneLightX = 1.6f;
-    sceneLightY = 2.8f;
-    sceneLightZ = 1.8f;
+    sceneLightX = -2.8f;
+    sceneLightY = 2.4f;
+    sceneLightZ = 1.7f;
     light.SetPosition(sceneLightX, sceneLightY, sceneLightZ);
 
     initFruits();
@@ -802,18 +826,16 @@ void Render(double delta_time)
         light.SetPosition(sceneLightX, sceneLightY, sceneLightZ);
     }
 
-    // Гизмо стандартного Light держим в той же точке, что и реальный источник GL_LIGHT0.
+    // Внутренний объект Light держим в той же точке, но не рисуем его маркер.
     light.SetPosition(sceneLightX, sceneLightY, sceneLightZ);
 
     camera.SetUpCamera();
     glGetFloatv(GL_MODELVIEW_MATRIX, view_matrix);
-    light.SetUpLight();
     setupSceneLighting();
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_NORMALIZE);
-    glEnable(GL_COLOR_MATERIAL);
-    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+    glDisable(GL_COLOR_MATERIAL);
 
     glDisable(GL_TEXTURE_2D);
     glDisable(GL_BLEND);
