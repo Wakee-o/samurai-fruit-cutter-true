@@ -21,7 +21,7 @@ Light light;
 #include "Camera.h"
 Camera camera;
 
-
+// Глобальные переключатели лабораторной работы
 bool texturing = true;
 bool lightning = true;
 bool alpha = true;
@@ -29,7 +29,7 @@ bool alpha = true;
 // Текстовая панель HUD
 GuiTextRectangle text;
 
-
+// Простая текстура из исходного проекта: "квадратик станкина", натянутый на грань пола
 Texture stankin_tex;
 
 float view_matrix[16];
@@ -64,12 +64,15 @@ int score = 0;
 int missed = 0;
 bool paused = false;
 
-//
-float sceneLightX = -2.8f;
-float sceneLightY = 2.4f;
-float sceneLightZ = 1.7f;
+// Фиксированная позиция источника света для этой сцены.
+// Переключатель L включает и выключает освещение, но источник света больше не перемещается.
+const float sceneLightX = -2.8f;
+const float sceneLightY = 2.4f;
+const float sceneLightZ = 1.7f;
 
-// 
+// ------------------------------------------------------------
+// Служебные функции
+// ------------------------------------------------------------
 
 static double rnd01(int seed)
 {
@@ -79,7 +82,9 @@ static double rnd01(int seed)
 
 static void setMaterial(float r, float g, float b, float a = 1.0f, float specPower = 48.0f)
 {
-    
+    // Материал задаём вручную через glMaterial.
+    // GL_COLOR_MATERIAL в Render() отключён, иначе OpenGL перезаписывает ambient/diffuse
+    // обычным glColor, и сцена выглядит почти одинаково при включенном и выключенном свете.
     float amb[] = { r * 0.025f, g * 0.025f, b * 0.025f, a };
     float dif[] = { r, g, b, a };
     float spec[] = { 0.70f, 0.70f, 0.70f, a };
@@ -89,7 +94,9 @@ static void setMaterial(float r, float g, float b, float a = 1.0f, float specPow
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, spec);
     glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, specPower);
 
-    
+    // Когда GL_LIGHTING выключен, OpenGL использует glColor напрямую.
+    // Поэтому специально делаем режим без освещения плоским и более тёмным,
+    // чтобы переключатель L был хорошо заметен на защите.
     if (lightning)
         glColor4f(r, g, b, a);
     else
@@ -110,7 +117,8 @@ static void disableAllSceneLights()
 
 static void setupSceneLighting()
 {
-    
+    // Полностью отключаем все старые источники света из каркаса лабораторной,
+    // чтобы на сцену влиял только наш GL_LIGHT0.
     disableAllSceneLights();
 
     if (!lightning)
@@ -124,7 +132,7 @@ static void setupSceneLighting()
     glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE);
     glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
 
-    
+    // Минимальная глобальная подсветка: без источника света сцена почти не освещается.
     float globalAmbient[] = { 0.002f, 0.002f, 0.003f, 1.0f };
     float lightAmbient[]  = { 0.010f, 0.008f, 0.006f, 1.0f };
     float lightDiffuse[]  = { 1.05f, 0.88f, 0.62f, 1.0f };
@@ -137,7 +145,7 @@ static void setupSceneLighting()
     glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular);
     glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
 
-    
+    // Более заметное затухание, чтобы включение и выключение освещения было хорошо видно.
     glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0.35f);
     glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.28f);
     glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.075f);
@@ -279,7 +287,8 @@ static bool fruitTouchedBySword(const Fruit& f)
 {
     if (slashTimer <= 0.03) return false;
 
-    
+    // Хитбоксы теперь повторяют направление видимого клинка:
+    // влево/вправо — почти горизонтальная полоса, вверх — вертикальная полоса.
     if (fabs(f.z) > 0.72)
         return false;
 
@@ -393,7 +402,7 @@ static void drawTexturedGround()
     {
         glEnable(GL_TEXTURE_2D);
         stankin_tex.Bind();
-        
+        // Текстура умножается на освещение, поэтому пол тоже реагирует на L и F.
         glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
     }
     else
@@ -455,7 +464,7 @@ static void drawSakuraTree()
     drawBranch(-2.15, 0.48, -0.55,  10.0,  45.0, 0.62, 0.050);
     drawBranch(-2.18, 0.23, -0.55, -15.0, -45.0, 0.56, 0.048);
 
-    
+    // Крона из простых сфер: объект собран из геометрических примитивов.
     for (int i = 0; i < 12; ++i)
     {
         double a = i * PI / 6.0;
@@ -542,7 +551,8 @@ static void drawFruit(const Fruit& f)
 
 static double angleForLocalY(double dx, double dy)
 {
-   
+    // drawCylinderY/drawBox вытянуты вдоль локальной оси Y.
+    // Эта формула поворачивает локальную Y точно в направление вектора (dx, dy).
     return atan2(dy, dx) * 180.0 / PI - 90.0;
 }
 
@@ -587,7 +597,7 @@ static void drawSwordXY(double startX, double startY, double endX, double endY, 
     drawBox(0.22, 0.035, 0.055);
     glPopMatrix();
 
-    
+    // Сам клинок строго направлен от start к end.
     setMaterial(0.78f, 0.84f, 0.88f, 1.0f, 120.0f);
     glPushMatrix();
     glTranslated((startX + endX) * 0.5, (startY + endY) * 0.5, z);
@@ -635,10 +645,12 @@ static void drawSlashTrail()
     glDisable(GL_LIGHTING);
     glDisable(GL_TEXTURE_2D);
 
-    
+    // Прозрачный след не должен записываться в depth-buffer.
+    // Иначе он "вырезает" фрукты, которые рисуются рядом/после него.
     glDepthMask(GL_FALSE);
 
-    
+    // След теперь совпадает с направлением удара:
+    // влево/вправо — горизонтальная полоса, вверх — вертикальная.
     if (samuraiPose == POSE_SLASH_LEFT)
         drawTrailRibbonXY(0.18, 0.20, -1.36, 0.20, 0.08, 0.13, a);
     else if (samuraiPose == POSE_SLASH_RIGHT)
@@ -659,7 +671,8 @@ static void drawSamurai()
     double k = (slashTimer > 0.0) ? (slashTimer / SLASH_DURATION) : 0.0;
     double wobble = (slashTimer > 0.0) ? 0.025 * sin((1.0 - k) * PI * 2.0) : 0.0;
 
-    
+    // Координаты руки и кончика катаны задаются явно.
+    // Поэтому удары влево/вправо теперь не "диагональные", а строго горизонтальные.
     double handX = 0.33;
     double handY = 0.78;
     double tipX = 0.58;
@@ -723,7 +736,7 @@ static void drawSamurai()
     setMaterial(0.10f, 0.12f, 0.18f, 1.0f, 20.0f);
     drawCylinderBetweenXY(-0.24, 0.82, -0.38, 0.55, 0.00, 0.045);
 
-    
+    // Правая рука смотрит прямо к рукояти катаны.
     setMaterial(0.10f, 0.12f, 0.18f, 1.0f, 20.0f);
     drawCylinderBetweenXY(0.24, 0.82, handX, handY, 0.03, 0.045);
 
@@ -734,7 +747,7 @@ static void drawSamurai()
     drawSphere(0.055, 12, 6);
     glPopMatrix();
 
-    
+    // Катана. При J/← она строго влево, при K/→ строго вправо.
     drawSwordXY(handX, handY, tipX, tipY, 0.05);
 
     glPopMatrix();
@@ -776,25 +789,19 @@ void initRender()
 
     camera.caclulateCameraPos();
 
-    
+    // Камера из исходного каркаса
     gl.WheelEvent.reaction(&camera, &Camera::Zoom);
     gl.MouseMovieEvent.reaction(&camera, &Camera::MouseMovie);
     gl.MouseLeaveEvent.reaction(&camera, &Camera::MouseLeave);
     gl.MouseLdownEvent.reaction(&camera, &Camera::MouseStartDrag);
     gl.MouseLupEvent.reaction(&camera, &Camera::MouseStopDrag);
 
-    gl.MouseMovieEvent.reaction(&light, &Light::MoveLight);
-    gl.KeyDownEvent.reaction(&light, &Light::StartDrug);
-    gl.KeyUpEvent.reaction(&light, &Light::StopDrug);
 
     gl.KeyDownEvent.reaction(switchModes);
 
     text.setSize(620, 260);
 
     camera.setPosition(3.6, 2.25, 3.0);
-    sceneLightX = -2.8f;
-    sceneLightY = 2.4f;
-    sceneLightZ = 1.7f;
     light.SetPosition(sceneLightX, sceneLightY, sceneLightZ);
 
     initFruits();
@@ -805,15 +812,7 @@ void Render(double delta_time)
     full_time += delta_time;
     updateGame(delta_time);
 
-    if (gl.isKeyPressed('F'))
-    {
-        sceneLightX = (float)camera.x();
-        sceneLightY = (float)camera.y();
-        sceneLightZ = (float)camera.z();
-        light.SetPosition(sceneLightX, sceneLightY, sceneLightZ);
-    }
-
-    
+    // Источник света фиксированный. Перемещение света отключено.
     light.SetPosition(sceneLightX, sceneLightY, sceneLightZ);
 
     camera.SetUpCamera();
@@ -831,7 +830,7 @@ void Render(double delta_time)
 
     glShadeModel(GL_SMOOTH);
 
-    
+    // Оси можно отключить, если нужна более "игровая" картинка.
     gl.DrawAxes();
 
     drawMoonAndBackground();
@@ -843,7 +842,7 @@ void Render(double delta_time)
     for (int i = 0; i < (int)fruits.size(); ++i)
         drawFruit(fruits[i]);
 
-    
+    // Прозрачные объекты рисуем после непрозрачных, чтобы они не портили z-buffer.
     drawSlashTrail();
     drawTransparentPetals();
 
@@ -867,7 +866,7 @@ void Render(double delta_time)
        << L"T - " << (texturing ? L"[вкл] выкл" : L"вкл [выкл]") << L" текстура пола\n"
        << L"L - " << (lightning ? L"[вкл] выкл" : L"вкл [выкл]") << L" освещение\n"
        << L"A - " << (alpha ? L"[вкл] выкл" : L"вкл [выкл]") << L" альфа-наложение лепестков/следа\n"
-       << L"P - пауза, R - сброс, F - свет в позицию камеры\n"
+       << L"P - пауза, R - сброс\n"
        << L"Состояние самурая: "
        << (samuraiPose == POSE_IDLE ? L"ожидание" :
            samuraiPose == POSE_SLASH_LEFT ? L"удар влево" :
